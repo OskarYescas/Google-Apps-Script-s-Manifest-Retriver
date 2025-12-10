@@ -1,0 +1,139 @@
+# Master Implementation Guide: Google Workspace Manifest Auditor
+
+This is a step-by-step guide on how to create a pipeline to retrive all manifest from stand alone Apps Scripts for each user in the domain (Apps Script projects in Shared Drives Out of scope)
+
+> [!IMPORTANT]
+>**IMPORTANT DISCLAIMER**: This solution offers a recommended approach that is not exhaustive and is not intended as a final enterprise-ready solution. Customers should consult their Dev, security, and networking teams before deployment.
+
+## Phase 1: Infrastructure & Permissions
+
+### 1. Project Setup
+1.  **Create/Select Project:** Use a dedicated project (e.g., `audit-automation-prod`).
+2.  **Enable APIs:**
+    * Admin SDK API
+    * Google Drive API
+    * Apps Script API
+    * BigQuery API
+    * Cloud Run API
+    * Cloud Build API
+    * Artifact Registry API
+
+### 2. Identity & Access Management (IAM)
+> [!IMPORTANT]
+> You must configure two distinct identities: the **Runtime Service Account** (which runs the script) and the **Build Agent** (which deploys the code).
+
+#### A. The Runtime Service Account (`script-auditor`)
+1.  **Create the account:**
+    * **Name:** `script-auditor`
+    * **Email:** `script-auditor@[PROJECT_ID].iam.gserviceaccount.com`
+2.  **Copy the Unique Client ID** (required for the next step).
+
+#### B. Domain-Wide Delegation (Admin Console)
+Go to `admin.google.com` > **Security** > **Access and data control** > **API controls** > **Manage Domain Wide Delegation**.
+
+1.  Add the **Unique Client ID**.
+2.  **Scopes:**
+    ```text
+    [https://www.googleapis.com/auth/admin.directory.user.readonly](https://www.googleapis.com/auth/admin.directory.user.readonly),
+    [https://www.googleapis.com/auth/drive.readonly](https://www.googleapis.com/auth/drive.readonly),
+    [https://www.googleapis.com/auth/script.projects.readonly](https://www.googleapis.com/auth/script.projects.readonly)
+    ```
+
+#### C. Permission Grants (The "Troubleshooting" Fixes)
+Run these commands in Cloud Shell to apply all necessary roles found during testing.
+
+```bash
+# 1. Setup Variables
+export PROJECT_ID=[YOUR_PROJECT_ID]
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+export RUNTIME_SA="script-auditor@${PROJECT_ID}.iam.gserviceaccount.com"
+export BUILD_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+# Grant Build Permissions 
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$BUILD_SA" --role="roles/logging.logWriter"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$BUILD_SA" \
+  --role="roles/storage.objectViewer"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$BUILD_SA" \
+  --role="roles/artifactregistry.writer"
+
+# Grant Self-Signing 
+# This allows the SA to sign its own tokens for Domain-Wide Delegation
+gcloud iam service-accounts add-iam-policy-binding $RUNTIME_SA \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+# Grant BigQuery Access 
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/bigquery.dataEditor"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$RUNTIME_SA" --role="roles/bigquery.jobUser"
+  ```
+  
+## Phase 2: BigQuery Setup
+- Create Dataset: manifest_dataset
+- Create Table: manifest_audit_log
+- Schema:
+    - script_id (STRING)
+    - script_name (STRING)
+    - owner_email (STRING)
+    - manifest_content (STRING)
+    - extraction_date (TIMESTAMP)
+
+## Phase 3: Deployment
+### 1. Deploy to Cloud Run
+Run this command from the folder containing your code. This uses Source Deploy and injects the cleaned environment variables.
+
+```bash
+gcloud run deploy manifest-auditor \
+  --source . \
+  --region us-central1 \
+  --platform managed \
+  --memory 2Gi \
+  --cpu 2 \
+  --timeout 3600 \
+  --concurrency 1 \
+  --no-allow-unauthenticated \
+  --service-account script-auditor@[PROJECT_ID].iam.gserviceaccount.com \
+  --set-env-vars PROJECT_ID=[PROJECT_ID] \
+  --set-env-vars DATASET_ID=manifest_dataset \
+  --set-env-vars MANIFEST_TABLE_ID=manifest_audit_log \
+  --set-env-vars ADMIN_USER_EMAIL=[ADMIN_EMAIL] \
+  --set-env-vars SERVICE_ACCOUNT_EMAIL=script-auditor@[PROJECT_ID].iam.gserviceaccount.com
+```
+
+## Phase 4: Automation (Scheduler)
+This configuration prevents the 403 and 401 errors by strictly enforcing OIDC authentication.
+### 1. Grant Invoker Permission
+Allows the Service Account to "knock on the door" of the private Cloud Run service.
+
+```bash
+gcloud run services add-iam-policy-binding manifest-auditor \
+  --region us-central1 \
+  --member="serviceAccount:script-auditor@[PROJECT_ID].iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+
+```
+
+### 2. Create the Scheduler Job
+Configures the job with the OIDC Token, which is the "ID Badge" required to enter.
+
+```bash
+# Get the URL automatically
+export SERVICE_URL=$(gcloud run services describe manifest-auditor --platform managed --region us-central1 --format 'value(status.url)')
+
+# Create the job (Runs every Sunday at 2 AM)
+gcloud scheduler jobs create http audit-weekly \
+  --schedule="0 2 * * 0" \
+  --uri=$SERVICE_URL \
+  --http-method=POST \
+  --oidc-service-account-email="script-auditor@[PROJECT_ID].iam.gserviceaccount.com" \
+  --location=us-central1
+
+```

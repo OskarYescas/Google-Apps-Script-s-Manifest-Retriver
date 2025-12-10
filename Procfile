@@ -1,0 +1,1 @@
+web: functions-framework --target=main_handler --signature-type=http
