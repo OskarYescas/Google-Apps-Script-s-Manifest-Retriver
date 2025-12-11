@@ -200,9 +200,10 @@ terraform apply \
   -var="project_id=$PROJECT_ID" \
   -var="admin_email=[YOUR_ADMIN_EMAIL]"
 *Type `yes` when prompted.*
+```
 
----
-
+### 3. Configure DwD
+```
 ### **Phase 2: Manual Domain-Wide Delegation**
 Terraform will output a `dwd_client_id` (Green text at the bottom). You must use this now.
 
@@ -213,18 +214,16 @@ Terraform will output a `dwd_client_id` (Green text at the bottom). You must use
 5.  **Client ID:** Paste the `dwd_client_id` from Terraform.
 6.  **Scopes:** Paste the `dwd_scopes` from Terraform.
 7.  Click **Authorize**.
+```
 
----
+### 4. Application Deployment
 
-### **Phase 3: Application Deployment**
-
-#### **1. Prepare App Files**
+### 5. Prepare App Files**
 Ensure your `main.py`, `requirements.txt`, and `Procfile` are in the current directory (`manifest-auditor-infra`).
 
-#### **2. Deploy to Cloud Run**
+### 6. Deploy to Cloud Run**
 We use `gcloud` here because Terraform has prepared the "Stage" (APIs & Permissions), but `gcloud` is the best tool for the "Actor" (Source Code).
-
-```bash
+```
 # Set your Admin Email Variable
 export ADMIN_EMAIL="[YOUR_ADMIN_EMAIL]"
 
@@ -244,10 +243,9 @@ gcloud run deploy manifest-auditor \
   --set-env-vars MANIFEST_TABLE_ID=manifest_audit_log \
   --set-env-vars ADMIN_USER_EMAIL=${ADMIN_EMAIL} \
   --set-env-vars SERVICE_ACCOUNT_EMAIL=script-auditor@${PROJECT_ID}.iam.gserviceaccount.com
+```
 
----
-
-### **Phase 4: Automation (Weekly Trigger)**
+### 7. Automation (Weekly Trigger)**
 
 Run this to create the Cloud Scheduler job that wakes up your script every week.
 
