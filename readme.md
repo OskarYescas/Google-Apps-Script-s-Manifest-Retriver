@@ -25,13 +25,6 @@ These variables define how the application runs. You must set these when deployi
 * `DATASET_ID`: (Optional) Default is `manifest_dataset`. Change only if you modified the BigQuery setup.
 * `MANIFEST_TABLE_ID`: (Optional) Default is `manifest_audit_log`. Change only if you modified the BigQuery setup.
 
-### **3. Terraform Inputs (`terraform.tfvars`)**
-If using the Terraform automation, create a `terraform.tfvars` file (do not commit this to git!) with your specific values:
-
-```hcl
-project_id  = "my-gcp-project-id"
-admin_email = "admin@example.com"
-
 ## Phase 1: Infrastructure & Permissions
 
 ### 1. Project Setup
