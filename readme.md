@@ -204,7 +204,7 @@ terraform apply \
 
 ### 3. Configure DwD
 ```
-### **Phase 2: Manual Domain-Wide Delegation**
+### Manual Domain-Wide Delegation**
 Terraform will output a `dwd_client_id` (Green text at the bottom). You must use this now.
 
 1.  Open **Google Admin Console** (`admin.google.com`).
@@ -218,7 +218,9 @@ Terraform will output a `dwd_client_id` (Green text at the bottom). You must use
 
 ### 4. Application Deployment
 
-### 5. Prepare App Files**
+Once Terraform finalizes, the last thing to do is deploy the app.
+
+### 5. Prepare App Files
 Ensure your `main.py`, `requirements.txt`, and `Procfile` are in the current directory (`manifest-auditor-infra`).
 
 ### 6. Deploy to Cloud Run**
