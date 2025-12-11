@@ -144,7 +144,7 @@ If you want to avoid the manual set-up, then you can use the folowing terraform 
 ## Prerequisites
 - Google Cloud Shell: We will execute everything here.
 - Workspace Admin Access: You need access to admin.google.com for the manual Domain-Wide Delegation step.
-- Application Files: Ensure your main.py, requirements.txt, and Procfile are ready in the directory
+- Application Files: Ensure your main.py, mani.tf, requirements.txt, and Procfile are ready in the directory
 
 ## Phase 0: Environment Preparation
 1. Check & Upgrade Terraform (Optional but Recommended)
@@ -168,4 +168,104 @@ sudo mv terraform /usr/bin/terraform
 
 # 4. Verify
 terraform -version
+```
+### Manual enablement 
+```bash
+# Set your project ID
+export PROJECT_ID=$(gcloud config get-value project)
+
+# Enable the Resource Manager API manually
+gcloud services enable cloudresourcemanager.googleapis.com
+```
+## Phase 1: Terraform Infrastructure
+
+### 1. Create the Directory & Files
+Upload your files in this directory
+```bash
+# Create a fresh directory
+mkdir manifest-auditor-infra
+cd manifest-auditor-infra
+```
+
+### 2. Initialize & Apply
+Execute the following in cloud shell
+
+```bash
+# 1. Initialize Terraform
+terraform init
+
+# 2. Apply the configuration
+# Replace [YOUR_ADMIN_EMAIL] with the actual email
+terraform apply \
+  -var="project_id=$PROJECT_ID" \
+  -var="admin_email=[YOUR_ADMIN_EMAIL]"
+*Type `yes` when prompted.*
+
+---
+
+### **Phase 2: Manual Domain-Wide Delegation**
+Terraform will output a `dwd_client_id` (Green text at the bottom). You must use this now.
+
+1.  Open **Google Admin Console** (`admin.google.com`).
+2.  Navigate to **Security > Access and data control > API controls**.
+3.  Click **Manage Domain Wide Delegation** (at the bottom).
+4.  Click **Add new**.
+5.  **Client ID:** Paste the `dwd_client_id` from Terraform.
+6.  **Scopes:** Paste the `dwd_scopes` from Terraform.
+7.  Click **Authorize**.
+
+---
+
+### **Phase 3: Application Deployment**
+
+#### **1. Prepare App Files**
+Ensure your `main.py`, `requirements.txt`, and `Procfile` are in the current directory (`manifest-auditor-infra`).
+
+#### **2. Deploy to Cloud Run**
+We use `gcloud` here because Terraform has prepared the "Stage" (APIs & Permissions), but `gcloud` is the best tool for the "Actor" (Source Code).
+
+```bash
+# Set your Admin Email Variable
+export ADMIN_EMAIL="[YOUR_ADMIN_EMAIL]"
+
+# Deploy
+gcloud run deploy manifest-auditor \
+  --source . \
+  --region us-central1 \
+  --platform managed \
+  --memory 2Gi \
+  --cpu 2 \
+  --timeout 3600 \
+  --concurrency 1 \
+  --no-allow-unauthenticated \
+  --service-account script-auditor@${PROJECT_ID}.iam.gserviceaccount.com \
+  --set-env-vars PROJECT_ID=${PROJECT_ID} \
+  --set-env-vars DATASET_ID=manifest_dataset \
+  --set-env-vars MANIFEST_TABLE_ID=manifest_audit_log \
+  --set-env-vars ADMIN_USER_EMAIL=${ADMIN_EMAIL} \
+  --set-env-vars SERVICE_ACCOUNT_EMAIL=script-auditor@${PROJECT_ID}.iam.gserviceaccount.com
+
+---
+
+### **Phase 4: Automation (Weekly Trigger)**
+
+Run this to create the Cloud Scheduler job that wakes up your script every week.
+
+```bash
+# 1. Grant "Invoker" permission to the Service Account
+gcloud run services add-iam-policy-binding manifest-auditor \
+  --region us-central1 \
+  --member="serviceAccount:script-auditor@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+
+# 2. Get the Service URL
+export SERVICE_URL=$(gcloud run services describe manifest-auditor --platform managed --region us-central1 --format 'value(status.url)')
+
+# 3. Create the Job (Runs Sundays at 2 AM)
+gcloud scheduler jobs create http audit-weekly \
+  --schedule="0 2 * * 0" \
+  --uri=$SERVICE_URL \
+  --http-method=POST \
+  --oidc-service-account-email="script-auditor@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --location=us-central1
 ```
