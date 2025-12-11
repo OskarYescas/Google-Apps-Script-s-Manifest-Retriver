@@ -5,6 +5,33 @@ This is a step-by-step guide on how to create a pipeline to retrive all manifest
 > [!IMPORTANT]
 >**IMPORTANT DISCLAIMER**: This solution offers a recommended approach that is not exhaustive and is not intended as a final enterprise-ready solution. Customers should consult their Dev, security, and networking teams before deployment.
 
+> [!TIP]
+> Configuration & Customization Checklist
+> Before deploying, ensure you have the following values ready from your own environment. You will need to replace the placeholders in the commands/scripts with these values.
+
+### **1. Required Identifiers**
+| Variable / Placeholder | Description | Where to find it |
+| :--- | :--- | :--- |
+| `[PROJECT_ID]` | Your Google Cloud Project ID (not the name). | GCP Console Dashboard > Project Info |
+| `[ADMIN_EMAIL]` | The email address of a Super Admin or delegated admin in your Workspace. | Google Admin Console |
+| `[YOUR_REGION]` | The GCP region for Cloud Run (Default is `us-central1`). | Decide based on your location (e.g., `us-east1`, `europe-west1`) |
+
+### **2. Environment Variables (Cloud Run & Local)**
+These variables define how the application runs. You must set these when deploying via `gcloud` or strictly follow the naming convention if using Terraform.
+
+* `PROJECT_ID`: The GCP Project ID where BigQuery and Cloud Run reside.
+* `ADMIN_USER_EMAIL`: The specific admin user email to be impersonated for API calls.
+* `SERVICE_ACCOUNT_EMAIL`: The email of the Runtime Service Account (e.g., `script-auditor@[PROJECT_ID].iam.gserviceaccount.com`).
+* `DATASET_ID`: (Optional) Default is `manifest_dataset`. Change only if you modified the BigQuery setup.
+* `MANIFEST_TABLE_ID`: (Optional) Default is `manifest_audit_log`. Change only if you modified the BigQuery setup.
+
+### **3. Terraform Inputs (`terraform.tfvars`)**
+If using the Terraform automation, create a `terraform.tfvars` file (do not commit this to git!) with your specific values:
+
+```hcl
+project_id  = "my-gcp-project-id"
+admin_email = "admin@example.com"
+
 ## Phase 1: Infrastructure & Permissions
 
 ### 1. Project Setup
