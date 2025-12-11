@@ -137,3 +137,35 @@ gcloud scheduler jobs create http audit-weekly \
   --location=us-central1
 
 ```
+
+# Terraform automation
+If you want to avoid the manual set-up, then you can use the folowing terraform code to automate it.
+
+## Prerequisites
+- Google Cloud Shell: We will execute everything here.
+- Workspace Admin Access: You need access to admin.google.com for the manual Domain-Wide Delegation step.
+- Application Files: Ensure your main.py, requirements.txt, and Procfile are ready in the directory
+
+## Phase 0: Environment Preparation
+1. Check & Upgrade Terraform (Optional but Recommended)
+Cloud Shell comes with Terraform installed, but it is often an older version (e.g., v1.5.7). 
+
+### Check version
+``` bash
+terraform -version
+```
+
+### Upgrade version
+``` bash
+# 1. Download the latest binary (Update version number if needed)
+wget https://releases.hashicorp.com/terraform/1.10.0/terraform_1.10.0_linux_amd64.zip
+
+# 2. Unzip it
+unzip terraform_1.10.0_linux_amd64.zip
+
+# 3. Move it to your local bin (overwriting the old one)
+sudo mv terraform /usr/bin/terraform
+
+# 4. Verify
+terraform -version
+```
