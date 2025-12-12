@@ -1,17 +1,12 @@
 .clasp.json
 .DS_Store
-# Terraform local states and variables (Contains Sensitive Data)
 *.tfstate
 *.tfstate.backup
 *.tfvars
 .terraform/
-
-# Python Environment & Local Secrets
 __pycache__/
 *.pyc
 venv/
 .env
-
-# IDE Settings
 .vscode/
 .idea/
